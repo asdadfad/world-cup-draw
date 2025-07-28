@@ -17,6 +17,8 @@ if st.button('Start Draw'):
         ["Wales/Scot/Ukr", "Peru/UAE/Au", "CostaRica/NZ", "Saudi Arabia", "Cameroon", "Ecuador", "Canada", "Ghana"]
     ]
 
+    table_placeholder = st.empty()
+
     available = [row[:] for row in available_all]
 
     group[0][0] = "Qatar"
@@ -27,6 +29,11 @@ if st.button('Start Draw'):
     for idx in range(1, 8):
         group[idx][0] = remaining_pot1[idx - 1]
     available[0] = [None] * len(available[0])
+
+    group_df = pd.DataFrame(group, columns=["Pot1", "Pot2", "Pot3", "Pot4"],
+                            index=["Group A", "Group B", "Group C", "Group D",
+                                   "Group E", "Group F", "Group G", "Group H"])
+    table_placeholder.dataframe(group_df)
 
     for pot in range(1, 4):
         teams = available[pot]
@@ -66,11 +73,11 @@ if st.button('Start Draw'):
             group[grp_idx][pot] = teams[winner]
             available[pot][winner] = None
 
-    st.subheader('Draw Result')
-    group_df = pd.DataFrame(group, columns=["Pot1", "Pot2", "Pot3", "Pot4"],
-                            index=["Group A", "Group B", "Group C", "Group D",
-                                   "Group E", "Group F", "Group G", "Group H"])
-    st.write(group_df)
+            group_df = pd.DataFrame(group, columns=["Pot1", "Pot2", "Pot3", "Pot4"],
+                                    index=["Group A", "Group B", "Group C", "Group D",
+                                           "Group E", "Group F", "Group G", "Group H"])
+            table_placeholder.dataframe(group_df)
 
     st.success('Draw completed!')
+
 
