@@ -1,8 +1,6 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
-import random
-from itertools import permutations
+
 from group_draw import *
 
 
@@ -41,9 +39,9 @@ if st.button('Start Draw'):
         for grp_idx in range(8):
 
             counts = {}
+            samples = sample_valid_assignments(group, available, 50)
             for idx in non_none_indices:
                 team = teams[idx]
-                samples = sample_valid_assignments(group, available, 50)
                 count = sum(1 for s in samples if s[grp_idx][pot] == team)
                 counts[idx] = count
 

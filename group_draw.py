@@ -69,7 +69,7 @@ def is_group_possible(team_names):
         if not is_group_valid2(combo):
             return False
     return True
-import random
+
 
 def sample_assignment(group, available):
     m = [row[:] for row in group]
@@ -92,66 +92,21 @@ def sample_valid_assignments(group, available, n):
         cand = sample_assignment(group, available)
         if check_all_groups(cand):
             count_valid += 1
-            results.append([row[:] for row in cand])  # 深拷贝
+            results.append([row[:] for row in cand])
     return results
 
+
+
+import random
 import math
 
-group = [[None]*4 for _ in range(8)]
-available_all = [
-    ["Qatar", "Belgium", "Brazil", "France", "Argentina", "England", "Portugal", "Spain"],
-    ["Denmark", "Netherlands", "Germany", "Switzerland", "Croatia", "Mexico", "USA", "Uruguay"],
-    ["Iran", "Serbia", "Japan", "Senegal", "Tunisia", "Poland", "KoreaRep", "Morocco"],
-    ["Wales/Scot/Ukr", "Peru/UAE/Au", "CostaRica/NZ", "Saudi Arabia", "Cameroon", "Ecuador", "Canada", "Ghana"]
-]
 
-available = [row[:] for row in available_all]
 
-group[0][0] = "Qatar"
-available[0][0] = None
 
-remaining_pot1 = [t for t in available[0] if t is not None]
-random.shuffle(remaining_pot1)
-for idx in range(1, 8):
-    group[idx][0] = remaining_pot1[idx-1]
-available[0] = [None] * len(available[0])
+def check_same_group(group, team1, team2):
+    for row in group:
+        if team1 in row and team2 in row:
+            return True
+    return False
 
-for pot in range(1, 4):
-    teams = available[pot]
-    non_none_indices = [i for i, t in enumerate(teams) if t is not None]
-    for grp_idx in range(8):
-        counts = {}
-        for idx in non_none_indices:
-            team = teams[idx]
-            samples = sample_valid_assignments(group, available, 50)  # 采样次数适当
-            count = sum(1 for s in samples if s[grp_idx][pot] == team)
-            counts[idx] = count
-        non0 = {idx: cnt for idx, cnt in counts.items() if cnt > 0}
-        if not non0:
-            continue
-        max_count = max(non0.values())
-        normalized = {idx: cnt/max_count for idx, cnt in non0.items()}
 
-        N = {}
-        for idx, prob in normalized.items():
-            if prob <= 0:
-                N[idx] = math.inf
-            else:
-                k = 1
-                while random.random() > prob:
-                    k += 1
-                N[idx] = k
-
-        NN = {idx: 0 for idx in N}
-        while True:
-            choice = random.choice(list(N.keys()))
-            NN[choice] += 1
-            if NN[choice] >= N[choice]:
-                winner = choice
-                break
-
-        group[grp_idx][pot] = teams[winner]
-        available[pot][winner] = None
-
-for i, grp in enumerate(group):
-    print(f"Group {chr(65+i)}: {grp}")
