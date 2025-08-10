@@ -1,81 +1,168 @@
 import streamlit as st
 import pandas as pd
-
-from group_draw import *
-
+import random
+import math
+import time
+from group_draw import sample_valid_assignments  # 你的采样函数
 
 st.title('World Cup Group Draw Simulator')
 
-if st.button('Start Draw'):
-    group = [[None] * 4 for _ in range(8)]
+# 高亮函数
+def highlight_row(row, current_team, winner_team):
+    color = ''
+    if row['Team'] == current_team:
+        color = 'background-color: lightcoral;'  # 红色
+    if row['Team'] == winner_team:
+        color = 'background-color: lightgreen;'  # 绿色
+    return [color] * len(row)
+
+
+# 初始化状态
+if "initialized" not in st.session_state:
+    st.session_state.initialized = False
+if "group" not in st.session_state:
+    st.session_state.group = None
+if "available" not in st.session_state:
+    st.session_state.available = None
+if "pot" not in st.session_state:
+    st.session_state.pot = 1
+if "grp_idx" not in st.session_state:
+    st.session_state.grp_idx = 0
+if "winner_team" not in st.session_state:
+    st.session_state.winner_team = None
+
+# Start 按钮
+if st.button("Start"):
+    st.session_state.group = [[None] * 4 for _ in range(8)]
     available_all = [
         ["Qatar", "Belgium", "Brazil", "France", "Argentina", "England", "Portugal", "Spain"],
         ["Denmark", "Netherlands", "Germany", "Switzerland", "Croatia", "Mexico", "USA", "Uruguay"],
         ["Iran", "Serbia", "Japan", "Senegal", "Tunisia", "Poland", "KoreaRep", "Morocco"],
         ["Wales/Scot/Ukr", "Peru/UAE/Au", "CostaRica/NZ", "Saudi Arabia", "Cameroon", "Ecuador", "Canada", "Ghana"]
     ]
+    st.session_state.available = [row[:] for row in available_all]
 
-    table_placeholder = st.empty()
-
-    available = [row[:] for row in available_all]
-
-    group[0][0] = "Qatar"
-    available[0][0] = None
-
-    remaining_pot1 = [t for t in available[0] if t is not None]
+    # Pot1 分配
+    st.session_state.group[0][0] = "Qatar"
+    st.session_state.available[0][0] = None
+    remaining_pot1 = [t for t in st.session_state.available[0] if t is not None]
     random.shuffle(remaining_pot1)
     for idx in range(1, 8):
-        group[idx][0] = remaining_pot1[idx - 1]
-    available[0] = [None] * len(available[0])
+        st.session_state.group[idx][0] = remaining_pot1[idx - 1]
+    st.session_state.available[0] = [None] * len(st.session_state.available[0])
 
-    group_df = pd.DataFrame(group, columns=["Pot1", "Pot2", "Pot3", "Pot4"],
+    st.session_state.pot = 1
+    st.session_state.grp_idx = 0
+    st.session_state.initialized = True
+    st.session_state.winner_team = None
+
+
+# 单步执行函数 + 动画
+def do_one_draw_step():
+    pot = st.session_state.pot
+    grp_idx = st.session_state.grp_idx
+    group = st.session_state.group
+    available = st.session_state.available
+
+    teams = available[pot]
+    non_none_indices = [i for i, t in enumerate(teams) if t is not None]
+    if not non_none_indices:
+        st.session_state.pot += 1
+        st.session_state.grp_idx = 0
+        return
+
+    counts = {}
+    samples = sample_valid_assignments(group, available, 50)
+    for idx in non_none_indices:
+        team = teams[idx]
+        count = sum(1 for s in samples if s[grp_idx][pot] == team)
+        counts[idx] = count
+
+    non_zero = {idx: cnt for idx, cnt in counts.items() if cnt > 0}
+    if not non_zero:
+        return
+    max_count = max(non_zero.values())
+    normalized = {idx: cnt / max_count for idx, cnt in non_zero.items()}
+
+    N = {}
+    for idx, prob in normalized.items():
+        if prob <= 0:
+            N[idx] = math.inf
+        else:
+            k = 1
+            while random.random() > prob:
+                k += 1
+            N[idx] = k
+
+    NN = {idx: 0 for idx in N}
+
+    # 动画模拟抽签过程
+    anim_placeholder = st.empty()
+    current_team = None
+    while True:
+        choice = random.choice(list(N.keys()))
+        current_team = teams[choice]  # 当前抽到的球队
+        NN[choice] += 1
+
+        anim_df = pd.DataFrame({
+            "Team": [teams[i] for i in N.keys()],
+            "Target N": [N[i] for i in N.keys()],
+            "Draw Count": [NN[i] for i in N.keys()]
+        })
+
+        styled_df = anim_df.style.apply(
+            highlight_row,
+            current_team=current_team,
+            winner_team=None,
+            axis=1
+        )
+        anim_placeholder.subheader(f"Drawing for Group {chr(65+grp_idx)}, Pot {pot+1}")
+        anim_placeholder.write(styled_df)
+
+        time.sleep(0.5)
+
+        if NN[choice] >= N[choice]:
+            winner = choice
+            break
+
+    # 结束动画后绿色高亮 winner
+    final_df = pd.DataFrame({
+        "Team": [teams[i] for i in N.keys()],
+        "Target N": [N[i] for i in N.keys()],
+        "Draw Count": [NN[i] for i in N.keys()]
+    })
+    styled_final = final_df.style.apply(
+        highlight_row,
+        current_team=None,
+        winner_team=teams[winner],
+        axis=1
+    )
+    anim_placeholder.subheader(f"Drawing for Group {chr(65+grp_idx)}, Pot {pot+1} - Final Result")
+    anim_placeholder.write(styled_final)
+
+    # 更新结果
+    group[grp_idx][pot] = teams[winner]
+    st.session_state.winner_team = teams[winner]
+    available[pot][winner] = None
+
+    # 更新下一个位置
+    st.session_state.grp_idx += 1
+    if st.session_state.grp_idx >= 8:
+        st.session_state.pot += 1
+        st.session_state.grp_idx = 0
+
+
+# Next 按钮
+if st.session_state.initialized and st.button("Next"):
+    do_one_draw_step()
+
+# 总分组表
+if st.session_state.initialized:
+    group_df = pd.DataFrame(st.session_state.group, columns=["Pot1", "Pot2", "Pot3", "Pot4"],
                             index=["Group A", "Group B", "Group C", "Group D",
                                    "Group E", "Group F", "Group G", "Group H"])
-    table_placeholder.dataframe(group_df)
+    st.subheader("Current Groups")
+    st.dataframe(group_df)
 
-    for pot in range(1, 4):
-        teams = available[pot]
-        non_none_indices = [i for i, t in enumerate(teams) if t is not None]
-        for grp_idx in range(8):
-
-            counts = {}
-            samples = sample_valid_assignments(group, available, 50)
-            for idx in non_none_indices:
-                team = teams[idx]
-                count = sum(1 for s in samples if s[grp_idx][pot] == team)
-                counts[idx] = count
-
-            non_zero = {idx: cnt for idx, cnt in counts.items() if cnt > 0}
-            if not non_zero:
-                continue
-            max_count = max(non_zero.values())
-            normalized = {idx: cnt / max_count for idx, cnt in non_zero.items()}
-
-            N = {}
-            for idx, prob in normalized.items():
-                if prob <= 0:
-                    N[idx] = math.inf
-                else:
-                    k = 1
-                    while random.random() > prob:
-                        k += 1
-                    N[idx] = k
-
-            NN = {idx: 0 for idx in N}
-            while True:
-                choice = random.choice(list(N.keys()))
-                NN[choice] += 1
-                if NN[choice] >= N[choice]:
-                    winner = choice
-                    break
-            group[grp_idx][pot] = teams[winner]
-            available[pot][winner] = None
-
-            group_df = pd.DataFrame(group, columns=["Pot1", "Pot2", "Pot3", "Pot4"],
-                                    index=["Group A", "Group B", "Group C", "Group D",
-                                           "Group E", "Group F", "Group G", "Group H"])
-            table_placeholder.dataframe(group_df)
-
-    st.success('Draw completed!')
-
-
+    if st.session_state.pot > 3:
+        st.success("Draw completed!")
