@@ -57,7 +57,7 @@ if st.button("Start"):
     st.session_state.winner_team = None
 
 
-# 单步执行函数 + 动画
+# 单步执行函数（带动画）
 def do_one_draw_step():
     pot = st.session_state.pot
     grp_idx = st.session_state.grp_idx
@@ -101,7 +101,7 @@ def do_one_draw_step():
     current_team = None
     while True:
         choice = random.choice(list(N.keys()))
-        current_team = teams[choice]  # 当前抽到的球队
+        current_team = teams[choice]
         NN[choice] += 1
 
         anim_df = pd.DataFrame({
@@ -116,7 +116,6 @@ def do_one_draw_step():
             winner_team=None,
             axis=1
         )
-        anim_placeholder.subheader(f"Drawing for Group {chr(65+grp_idx)}, Pot {pot+1}")
         anim_placeholder.write(styled_df)
 
         time.sleep(0.5)
@@ -125,7 +124,7 @@ def do_one_draw_step():
             winner = choice
             break
 
-    # 结束动画后绿色高亮 winner
+    # 最终结果
     final_df = pd.DataFrame({
         "Team": [teams[i] for i in N.keys()],
         "Target N": [N[i] for i in N.keys()],
@@ -137,26 +136,68 @@ def do_one_draw_step():
         winner_team=teams[winner],
         axis=1
     )
-    anim_placeholder.subheader(f"Drawing for Group {chr(65+grp_idx)}, Pot {pot+1} - Final Result")
     anim_placeholder.write(styled_final)
 
-    # 更新结果
+    # 更新状态
     group[grp_idx][pot] = teams[winner]
     st.session_state.winner_team = teams[winner]
     available[pot][winner] = None
 
-    # 更新下一个位置
     st.session_state.grp_idx += 1
     if st.session_state.grp_idx >= 8:
         st.session_state.pot += 1
         st.session_state.grp_idx = 0
 
 
-# Next 按钮
-if st.session_state.initialized and st.button("Next"):
-    do_one_draw_step()
+# 快速完成抽签（无动画）
+def finish_draw_fast():
+    while st.session_state.pot <= 3:
+        pot = st.session_state.pot
+        grp_idx = st.session_state.grp_idx
+        group = st.session_state.group
+        available = st.session_state.available
 
-# 总分组表
+        teams = available[pot]
+        non_none_indices = [i for i, t in enumerate(teams) if t is not None]
+        if not non_none_indices:
+            st.session_state.pot += 1
+            st.session_state.grp_idx = 0
+            continue
+
+        counts = {}
+        samples = sample_valid_assignments(group, available, 50)
+        for idx in non_none_indices:
+            team = teams[idx]
+            count = sum(1 for s in samples if s[grp_idx][pot] == team)
+            counts[idx] = count
+
+        non_zero = {idx: cnt for idx, cnt in counts.items() if cnt > 0}
+        if not non_zero:
+            winner = random.choice(non_none_indices)
+        else:
+            max_count = max(non_zero.values())
+            normalized = {idx: cnt / max_count for idx, cnt in non_zero.items()}
+            probs = list(normalized.values())
+            winner = random.choice(list(normalized.keys()))
+
+        group[grp_idx][pot] = teams[winner]
+        available[pot][winner] = None
+
+        st.session_state.grp_idx += 1
+        if st.session_state.grp_idx >= 8:
+            st.session_state.pot += 1
+            st.session_state.grp_idx = 0
+
+
+# 控制按钮显示
+if st.session_state.initialized:
+    if st.session_state.pot <= 3:
+        if st.button("Next"):
+            do_one_draw_step()
+        if st.button("Finish Draw"):
+            finish_draw_fast()
+
+# 显示总表
 if st.session_state.initialized:
     group_df = pd.DataFrame(st.session_state.group, columns=["Pot1", "Pot2", "Pot3", "Pot4"],
                             index=["Group A", "Group B", "Group C", "Group D",
